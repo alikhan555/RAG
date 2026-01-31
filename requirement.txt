@@ -1,0 +1,9 @@
+langchain
+langchain-community
+langchain-core
+pypdf
+pymupdf
+langchain-ollama
+qdrant-client
+langchain-qdrant
+langchain-openai
