@@ -1,26 +1,35 @@
-import os
-from dotenv import load_dotenv
 from langchain_community.document_loaders import PyPDFLoader
 from langchain_text_splitters import RecursiveCharacterTextSplitter
-from langchain_openai import OpenAIEmbeddings
 from langchain.chat_models import init_chat_model
-from langchain_community.vectorstores import FAISS
 from langchain_core.runnables import RunnablePassthrough
 from langchain_core.output_parsers import StrOutputParser
 from langchain_core.prompts import ChatPromptTemplate
 from qdrant_client import QdrantClient
 from langchain_qdrant import QdrantVectorStore
+from embedding_generator import EmbeddingGenerator
 
 
 class RAGPipeline:
-    def __init__(self, url, collection_name, model_name, model_provider):
-        load_dotenv()
-        os.environ["OPENAI_API_KEY"] = os.getenv("OPENAI_API_KEY")
-        self.embeddings = OpenAIEmbeddings()
-        self.url = url
+    def __init__(
+        self,
+        qdrant_url,
+        collection_name,
+        llm_model_provider,
+        llm_model_name,
+        embed_model_provider,
+        embed_model_name,
+        **embed_kwargs,
+    ):
+        embed_gen = EmbeddingGenerator(
+            provider=embed_model_provider,
+            model=embed_model_name,
+            **embed_kwargs,
+        )
+        self.embeddings = embed_gen.get_embeddings()
+        self.qdrant_url = qdrant_url
         self.collection_name = collection_name
-        self.model_name = model_name
-        self.model_provider = model_provider
+        self.llm_model_name = llm_model_name
+        self.llm_model_provider = llm_model_provider
 
     def ingest(self, file_path):
         loader = PyPDFLoader(file_path)
@@ -34,7 +43,7 @@ class RAGPipeline:
         vectorstore = QdrantVectorStore.from_documents(
             docs,
             self.embeddings,
-            url=self.url,
+            url=self.qdrant_url,
             collection_name=self.collection_name,
         )
 
@@ -42,13 +51,15 @@ class RAGPipeline:
 
     def query(self, question):
         vectorstore = QdrantVectorStore(
-            client=QdrantClient(url=self.url),
+            client=QdrantClient(url=self.qdrant_url),
             collection_name=self.collection_name,
             embedding=self.embeddings,
         )
 
         retriever = vectorstore.as_retriever()
-        llm = init_chat_model(self.model_name, model_provider=self.model_provider)
+        llm = init_chat_model(
+            self.llm_model_name, model_provider=self.llm_model_provider
+        )
 
         prompt = ChatPromptTemplate.from_template("""
             Answer using the context only.
