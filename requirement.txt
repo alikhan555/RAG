@@ -7,3 +7,4 @@ langchain-ollama
 qdrant-client
 langchain-qdrant
 langchain-openai
+faiss-cpu
