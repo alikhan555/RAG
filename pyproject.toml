@@ -15,4 +15,5 @@ dependencies = [
     "pymupdf>=1.26.7",
     "pypdf>=6.6.2",
     "qdrant-client>=1.16.2",
+    "sentence-transformers>=5.2.2",
 ]

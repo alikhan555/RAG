@@ -1,5 +1,5 @@
 from langchain_community.document_loaders import PyPDFLoader
-from langchain_text_splitters import RecursiveCharacterTextSplitter
+from langchain_text_splitters import SentenceTransformersTokenTextSplitter
 from langchain.chat_models import init_chat_model
 from langchain_core.runnables import RunnablePassthrough
 from langchain_core.output_parsers import StrOutputParser
@@ -32,22 +32,30 @@ class RAGPipeline:
         self.llm_model_provider = llm_model_provider
 
     def ingest(self, file_path):
+        print("Loading pdf file.")
         loader = PyPDFLoader(file_path)
         documents = loader.load()
+        print("Loaded pdf file. Total Documents: {documents}.", len(documents))
 
-        text_splitter = RecursiveCharacterTextSplitter(
-            chunk_size=1000, chunk_overlap=200
+        print("Splitting pdf file into chunks.")
+        text_splitter = SentenceTransformersTokenTextSplitter(
+            chunk_size=256,
+            chunk_overlap=40,
+            model_name="sentence-transformers/all-MiniLM-L6-v2",
         )
         docs = text_splitter.split_documents(documents)
+        print("Splitted pdf file into chunks. Total Chunks:{chunks}.", len(docs))
 
+        print("Storing chunks into vector store.")
         vectorstore = QdrantVectorStore.from_documents(
             docs,
             self.embeddings,
             url=self.qdrant_url,
             collection_name=self.collection_name,
         )
+        print("Stored chunks into vector store.")
 
-        print("Ingestion completed")
+        print("Ingestion completed.")
 
     def query(self, question):
         vectorstore = QdrantVectorStore(
@@ -56,16 +64,17 @@ class RAGPipeline:
             embedding=self.embeddings,
         )
 
-        retriever = vectorstore.as_retriever()
+        retriever = vectorstore.as_retriever(search_kwargs={"k": 5})
         llm = init_chat_model(
             self.llm_model_name, model_provider=self.llm_model_provider
         )
 
         prompt = ChatPromptTemplate.from_template("""
-            Answer using the context only.
+            Answer the question using only the provided context.
+            If the answer is not present in the context, respond with "Answer not found in context." and do not make assumptions.
             Context: {context}
             Question: {question}
-            Display List Page number for reference.
+            Display list page numbers for reference if applicable.
             """)
 
         chain = (
