@@ -13,7 +13,6 @@ class RAGPipeline:
     def __init__(
         self,
         qdrant_url,
-        collection_name,
         llm_model_provider,
         llm_model_name,
         embed_model_provider,
@@ -27,11 +26,10 @@ class RAGPipeline:
         )
         self.embeddings = embed_gen.get_embeddings()
         self.qdrant_url = qdrant_url
-        self.collection_name = collection_name
         self.llm_model_name = llm_model_name
         self.llm_model_provider = llm_model_provider
 
-    def ingest(self, file_path):
+    def ingest(self, file_path, collection_name):
         print("Loading pdf file.")
         loader = PyPDFLoader(file_path)
         documents = loader.load()
@@ -51,16 +49,16 @@ class RAGPipeline:
             docs,
             self.embeddings,
             url=self.qdrant_url,
-            collection_name=self.collection_name,
+            collection_name=collection_name,
         )
         print("Stored chunks into vector store.")
 
         print("Ingestion completed.")
 
-    def query(self, question):
+    def query(self, question, collection_name):
         vectorstore = QdrantVectorStore(
             client=QdrantClient(url=self.qdrant_url),
-            collection_name=self.collection_name,
+            collection_name=collection_name,
             embedding=self.embeddings,
         )
 

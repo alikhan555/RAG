@@ -6,7 +6,6 @@ app = FastAPI()
 
 rag_pipeline = RAGPipeline(
     qdrant_url="http://localhost:6333",
-    collection_name="rag_book",  # this should be in ingest method
     llm_model_provider="ollama",
     llm_model_name="llama3.1",
     embed_model_provider="ollama",
@@ -21,5 +20,5 @@ async def ingest(file: UploadFile = File(...)):
     with open(local_file_path, "wb") as buffer:
         shutil.copyfileobj(file.file, buffer)
 
-    # rag_pipeline.ingest(local_file_path)
+    # rag_pipeline.ingest(local_file_path, collection_name="rag_book")
     return {"message": "Ingestion completed"}
