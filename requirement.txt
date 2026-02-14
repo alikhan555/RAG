@@ -9,3 +9,7 @@ langchain-qdrant
 langchain-openai
 faiss-cpu
 sentence-transformers
+
+fastapi
+uvicorn
+python-multipart
