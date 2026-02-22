@@ -29,7 +29,7 @@ class RAGPipeline:
         self.llm_model_name = llm_model_name
         self.llm_model_provider = llm_model_provider
 
-    def ingest(self, file_path, user_id, knowledge_base_code, collection_name="RAG"):
+    def ingest(self, file_path, thread_id, collection_name="RAG"):
         print(f"Loading pdf file: {file_path}")
         loader = PyPDFLoader(file_path)
         documents = loader.load()
@@ -45,8 +45,7 @@ class RAGPipeline:
 
         # Add metadata for filtering
         for doc in docs:
-            doc.metadata["user_id"] = user_id
-            doc.metadata["knowledge_base_code"] = knowledge_base_code
+            doc.metadata["thread_id"] = thread_id
 
         print(f"Splitted pdf file into chunks. Total Chunks: {len(docs)}")
 
@@ -61,7 +60,7 @@ class RAGPipeline:
 
         print("Ingestion completed.")
 
-    def query(self, question, user_id, knowledge_base_code, collection_name="RAG"):
+    def query(self, question, thread_id, collection_name="RAG"):
         vectorstore = QdrantVectorStore(
             client=QdrantClient(url=self.qdrant_url),
             collection_name=collection_name,
@@ -72,12 +71,8 @@ class RAGPipeline:
         qdrant_filter = models.Filter(
             must=[
                 models.FieldCondition(
-                    key="metadata.user_id", match=models.MatchValue(value=user_id)
-                ),
-                models.FieldCondition(
-                    key="metadata.knowledge_base_code",
-                    match=models.MatchValue(value=knowledge_base_code),
-                ),
+                    key="metadata.thread_id", match=models.MatchValue(value=thread_id)
+                )
             ]
         )
 

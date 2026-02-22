@@ -15,27 +15,21 @@ rag_pipeline = RAGPipeline(
 
 
 class QueryRequest(BaseModel):
-    userId: str = Field(..., min_length=1)
-    knowledgeBaseCode: str = Field(..., min_length=1)
+    threadId: str = Field(..., min_length=1)
     question: str = Field(..., min_length=1)
 
 
 @app.post("/ingest")
 async def ingest(
-    userId: str = Form(...),
-    knowledgeBaseCode: str = Form(...),
+    threadId: str = Form(...),
     file: UploadFile = File(...),
 ):
     # 1. Save file locally
-    local_file_path = (
-        f"./data/upload/pdf/{userId}-{knowledgeBaseCode}-{file.filename.split('.')[-1]}"
-    )
+    local_file_path = f"./data/upload/pdf/{threadId}-{file.filename}"
     with open(local_file_path, "wb") as buffer:
         shutil.copyfileobj(file.file, buffer)
 
-    rag_pipeline.ingest(
-        local_file_path, user_id=userId, knowledge_base_code=knowledgeBaseCode
-    )
+    rag_pipeline.ingest(local_file_path, thread_id=threadId)
     return {"message": "Ingestion completed"}
 
 
@@ -43,7 +37,6 @@ async def ingest(
 async def query(request: QueryRequest):
     answer = rag_pipeline.query(
         request.question,
-        user_id=request.userId,
-        knowledge_base_code=request.knowledgeBaseCode,
+        thread_id=request.threadId,
     )
     return {"answer": answer}
