@@ -1,4 +1,5 @@
 from fastapi import FastAPI, File, UploadFile, Form
+from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field
 import shutil
 from rag_pipline import RAGPipeline
@@ -8,7 +9,7 @@ app = FastAPI()
 rag_pipeline = RAGPipeline(
     qdrant_url="http://localhost:6333",
     llm_model_provider="openai",
-    llm_model_name="gpt-5-nano",
+    llm_model_name="gpt-5-mini",
     embed_model_provider="openai",
     embed_model_name="text-embedding-3-small",
 )
@@ -35,8 +36,10 @@ async def ingest(
 
 @app.post("/query")
 async def query(request: QueryRequest):
-    answer = rag_pipeline.query(
-        request.question,
-        thread_id=request.threadId,
+    return StreamingResponse(
+        rag_pipeline.query_stream(
+            request.question,
+            thread_id=request.threadId,
+        ),
+        media_type="text/plain",
     )
-    return {"answer": answer}

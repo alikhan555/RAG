@@ -50,7 +50,7 @@ class RAGPipeline:
         print(f"Splitted pdf file into chunks. Total Chunks: {len(docs)}")
 
         print(f"Storing chunks into vector store collection: {collection_name}")
-        vectorstore = QdrantVectorStore.from_documents(
+        QdrantVectorStore.from_documents(
             docs,
             self.embeddings,
             url=self.qdrant_url,
@@ -60,14 +60,13 @@ class RAGPipeline:
 
         print("Ingestion completed.")
 
-    def query(self, question, thread_id, collection_name="RAG"):
+    def query_stream(self, question, thread_id, collection_name="RAG"):
         vectorstore = QdrantVectorStore(
             client=QdrantClient(url=self.qdrant_url),
             collection_name=collection_name,
             embedding=self.embeddings,
         )
 
-        # Define metadata filter
         qdrant_filter = models.Filter(
             must=[
                 models.FieldCondition(
@@ -99,6 +98,6 @@ class RAGPipeline:
             | StrOutputParser()
         )
 
-        result = chain.invoke(question)
-
-        return result
+        for chunk in chain.stream(question):
+            print(chunk, end="", flush=True)
+            yield chunk
