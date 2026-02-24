@@ -74,3 +74,18 @@ def add_message(thread_id: str, role: str, content: str):
         return new_message
     finally:
         db.close()
+
+
+def get_messages(thread_id: str):
+    """Retrieves all messages for a specific thread."""
+    db = SessionLocal()
+    try:
+        messages = (
+            db.query(Message)
+            .filter(Message.thread_id == thread_id)
+            .order_by(Message.created_at.asc())
+            .all()
+        )
+        return messages
+    finally:
+        db.close()

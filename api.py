@@ -4,7 +4,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field
 import shutil
 from rag_pipline import RAGPipeline
-from database import init_db, ensure_thread, add_message
+from database import init_db, ensure_thread, add_message, get_messages
 
 app = FastAPI()
 
@@ -88,3 +88,12 @@ async def query(request: QueryRequest):
         # Store assistant response
         add_message(request.threadId, "assistant", answer)
         return {"answer": answer}
+
+
+@app.get("/messages/{threadId}")
+async def get_chat_messages(threadId: str):
+    messages = get_messages(threadId)
+    return [
+        {"role": msg.role, "content": msg.content, "timestamp": msg.created_at}
+        for msg in messages
+    ]
