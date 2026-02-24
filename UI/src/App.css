@@ -121,6 +121,12 @@
   padding: 8px 12px;
 }
 
+.status-text {
+  margin: 0;
+  font-size: 13px;
+  color: #9ab0c5;
+}
+
 .ingest-card {
   width: min(680px, calc(100% - 48px));
   margin: 72px auto 24px;

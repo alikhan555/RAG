@@ -1,24 +1,19 @@
-import { useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import './App.css'
 
 const INGEST_API_URL = import.meta.env.VITE_INGEST_API_URL ?? 'http://127.0.0.1:8000/ingest'
 const QUERY_API_URL = import.meta.env.VITE_QUERY_API_URL ?? 'http://127.0.0.1:8000/query'
+const THREADS_API_URL = import.meta.env.VITE_THREADS_API_URL ?? 'http://127.0.0.1:8000/threads'
+const MESSAGES_API_BASE =
+  import.meta.env.VITE_MESSAGES_API_BASE ?? 'http://127.0.0.1:8000/messages'
 
-const createChat = () => {
-  const id = crypto.randomUUID()
-  return {
-    id,
-    threadId: id,
-    title: '',
-    createdAt: new Date().toISOString(),
-    file: null,
-    ingesting: false,
-    isIngested: false,
-    ingestMeta: null,
-    messages: [],
-    error: '',
-  }
-}
+const createPendingThread = () => ({
+  threadId: crypto.randomUUID(),
+  title: '',
+  file: null,
+  ingesting: false,
+  error: '',
+})
 
 const getAnswerText = (payload) => {
   if (!payload) return 'No response returned from API.'
@@ -34,77 +29,139 @@ const getAnswerText = (payload) => {
 }
 
 function App() {
-  const [chats, setChats] = useState([createChat()])
-  const [activeChatId, setActiveChatId] = useState(null)
+  const [threads, setThreads] = useState([])
+  const [activeThreadId, setActiveThreadId] = useState(null)
+  const [pendingThread, setPendingThread] = useState(createPendingThread())
+  const [messages, setMessages] = useState([])
+  const [messagesLoading, setMessagesLoading] = useState(false)
+  const [messagesError, setMessagesError] = useState('')
+  const [threadsLoading, setThreadsLoading] = useState(false)
+  const [threadsError, setThreadsError] = useState('')
   const [draft, setDraft] = useState('')
   const [sending, setSending] = useState(false)
-  const [sidebarOpen, setSidebarOpen] = useState(true)
 
-  const currentChatId = activeChatId ?? chats[0]?.id ?? null
-  const activeChat = useMemo(
-    () => chats.find((chat) => chat.id === currentChatId) ?? null,
-    [chats, currentChatId],
+  const activeThread = useMemo(
+    () => threads.find((thread) => thread.threadId === activeThreadId) ?? null,
+    [threads, activeThreadId],
   )
 
-  const updateChat = (chatId, updater) => {
-    setChats((prev) => prev.map((chat) => (chat.id === chatId ? updater(chat) : chat)))
-  }
+  const fetchThreads = useCallback(async (preferredId) => {
+    setThreadsLoading(true)
+    setThreadsError('')
+    try {
+      const response = await fetch(THREADS_API_URL)
+      const payload = await response.json().catch(() => null)
+      if (!response.ok) {
+        throw new Error(payload?.detail ?? payload?.message ?? 'Threads API failed.')
+      }
+      const data = Array.isArray(payload) ? payload : []
+      setThreads(data)
+      setActiveThreadId((current) => {
+        if (preferredId && data.some((thread) => thread.threadId === preferredId)) {
+          return preferredId
+        }
+        if (current && data.some((thread) => thread.threadId === current)) {
+          return current
+        }
+        return data[0]?.threadId ?? null
+      })
+    } catch (error) {
+      setThreadsError(error.message || 'Unable to load threads.')
+    } finally {
+      setThreadsLoading(false)
+    }
+  }, [])
+
+  const fetchMessages = useCallback(async (threadId) => {
+    if (!threadId) return
+    setMessagesLoading(true)
+    setMessagesError('')
+    try {
+      const response = await fetch(`${MESSAGES_API_BASE}/${threadId}`)
+      const payload = await response.json().catch(() => null)
+      if (!response.ok) {
+        throw new Error(payload?.detail ?? payload?.message ?? 'Messages API failed.')
+      }
+      const data = Array.isArray(payload) ? payload : []
+      setMessages(
+        data.map((item) => ({
+          id: crypto.randomUUID(),
+          role: item.role,
+          text: item.content,
+        })),
+      )
+    } catch (error) {
+      setMessagesError(error.message || 'Unable to load messages.')
+    } finally {
+      setMessagesLoading(false)
+    }
+  }, [])
+
+  useEffect(() => {
+    fetchThreads()
+  }, [fetchThreads])
+
+  useEffect(() => {
+    if (!activeThreadId) {
+      setMessages([])
+      setMessagesError('')
+      return
+    }
+    setMessages([])
+    setMessagesError('')
+    fetchMessages(activeThreadId)
+  }, [activeThreadId, fetchMessages])
 
   const handleCreateChat = () => {
-    const newChat = createChat()
-    setChats((prev) => [newChat, ...prev])
-    setActiveChatId(newChat.id)
+    setActiveThreadId(null)
+    setMessages([])
+    setPendingThread(createPendingThread())
     setDraft('')
   }
 
-  const handleTitleChange = (chatId, nextTitle) => {
-    if (!chatId) return
-    updateChat(chatId, (chat) => ({
-      ...chat,
-      title: nextTitle,
+  const handleTitleChange = (value) => {
+    setPendingThread((prev) => ({
+      ...prev,
+      title: value,
       error: '',
     }))
   }
 
-  const handleFileSelect = (event, chatId) => {
+  const handleFileSelect = (event) => {
     const selected = event.target.files?.[0]
     if (!selected) return
     if (selected.type !== 'application/pdf') {
-      updateChat(chatId, (chat) => ({
-        ...chat,
+      setPendingThread((prev) => ({
+        ...prev,
         error: 'Only PDF files are accepted.',
       }))
       return
     }
-    updateChat(chatId, (chat) => ({
-      ...chat,
+    setPendingThread((prev) => ({
+      ...prev,
       file: selected,
       error: '',
-      title: chat.title?.trim() ? chat.title : selected.name.replace(/\.pdf$/i, '') || '',
+      title: prev.title?.trim() ? prev.title : selected.name.replace(/\.pdf$/i, '') || '',
     }))
   }
 
-  const handleIngest = async (chatId) => {
-    const chat = chats.find((item) => item.id === chatId)
-    if (!chat || !chat.file) {
-      updateChat(chatId, (item) => ({ ...item, error: 'Please choose a PDF first.' }))
+  const handleIngest = async () => {
+    if (!pendingThread.file) {
+      setPendingThread((prev) => ({ ...prev, error: 'Please choose a PDF first.' }))
       return
     }
-    if (!chat.title?.trim()) {
-      updateChat(chatId, (item) => ({
-        ...item,
-        error: 'Chat name is required before ingesting.',
-      }))
+    if (!pendingThread.title?.trim()) {
+      setPendingThread((prev) => ({ ...prev, error: 'Chat name is required before ingesting.' }))
       return
     }
 
-    updateChat(chatId, (item) => ({ ...item, ingesting: true, error: '' }))
-
+    setPendingThread((prev) => ({ ...prev, ingesting: true, error: '' }))
+    const threadIdToSelect = pendingThread.threadId
     try {
       const formData = new FormData()
-      formData.append('file', chat.file)
-      formData.append('threadId', chat.threadId)
-      formData.append('threadName', chat.title.trim())
+      formData.append('file', pendingThread.file)
+      formData.append('threadId', pendingThread.threadId)
+      formData.append('threadName', pendingThread.title.trim())
 
       const response = await fetch(INGEST_API_URL, {
         method: 'POST',
@@ -116,39 +173,33 @@ function App() {
         throw new Error(payload?.detail ?? payload?.message ?? 'Ingest API failed.')
       }
 
-      updateChat(chatId, (item) => ({
-        ...item,
-        ingesting: false,
-        isIngested: true,
-        ingestMeta: payload,
-        error: '',
-      }))
+      await fetchThreads(threadIdToSelect)
+      setPendingThread(createPendingThread())
+      setDraft('')
     } catch (error) {
-      updateChat(chatId, (item) => ({
-        ...item,
+      setPendingThread((prev) => ({
+        ...prev,
         ingesting: false,
         error: error.message || 'Unable to ingest PDF.',
       }))
+    } finally {
+      setPendingThread((prev) => ({ ...prev, ingesting: false }))
     }
   }
 
   const handleSend = async () => {
-    if (!activeChat || !activeChat.isIngested || !draft.trim() || sending) return
+    if (!activeThread || !draft.trim() || sending) return
 
     const text = draft.trim()
     const userMessage = { id: crypto.randomUUID(), role: 'user', text }
     setDraft('')
     setSending(true)
 
-    updateChat(activeChat.id, (chat) => ({
-      ...chat,
-      messages: [...chat.messages, userMessage],
-      error: '',
-    }))
+    setMessages((prev) => [...prev, userMessage])
 
     try {
       const body = {
-        threadId: activeChat.threadId,
+        threadId: activeThread.threadId,
         question: text,
       }
 
@@ -169,19 +220,14 @@ function App() {
         text: getAnswerText(payload),
       }
 
-      updateChat(activeChat.id, (chat) => ({
-        ...chat,
-        messages: [...chat.messages, assistantMessage],
-      }))
+      setMessages((prev) => [...prev, assistantMessage])
     } catch (error) {
       const friendlyMessage =
         error instanceof TypeError
           ? 'Cannot reach query API. Check backend is running on http://127.0.0.1:8000 and CORS is enabled.'
           : error.message || 'Unable to get response from API.'
-      updateChat(activeChat.id, (chat) => ({
-        ...chat,
-        error: friendlyMessage,
-      }))
+
+      setMessages((prev) => [...prev, { id: crypto.randomUUID(), role: 'assistant', text: friendlyMessage }])
     } finally {
       setSending(false)
     }
@@ -189,20 +235,25 @@ function App() {
 
   return (
     <div className="app-shell">
-      <aside className={`sidebar ${sidebarOpen ? 'open' : 'closed'}`}>
+      <aside className="sidebar">
         <button className="new-chat-btn" onClick={handleCreateChat}>
           + New Chat
         </button>
+        {threadsLoading ? (
+          <p className="status-text">Loading threads...</p>
+        ) : threadsError ? (
+          <p className="error-text">{threadsError}</p>
+        ) : null}
         <div className="chat-list">
-          {chats.map((chat) => (
+          {threads.map((thread) => (
             <button
-              key={chat.id}
-              className={`chat-item ${chat.id === currentChatId ? 'active' : ''}`}
-              onClick={() => setActiveChatId(chat.id)}
+              key={thread.threadId}
+              className={`chat-item ${thread.threadId === activeThreadId ? 'active' : ''}`}
+              onClick={() => setActiveThreadId(thread.threadId)}
             >
-              <span className="chat-item-title">{chat.title || 'New Chat'}</span>
+              <span className="chat-item-title">{thread.threadName}</span>
               <span className="chat-item-status">
-                {chat.isIngested ? 'Ready' : chat.file ? 'Upload pending' : 'No PDF'}
+                {thread.threadId === activeThreadId ? 'Active' : new Date(thread.createdAt).toLocaleString()}
               </span>
             </button>
           ))}
@@ -211,69 +262,69 @@ function App() {
 
       <main className="chat-panel">
         <header className="chat-header">
-          <button className="menu-btn" onClick={() => setSidebarOpen((prev) => !prev)}>
-            {sidebarOpen ? 'Hide' : 'Menu'}
+          <button className="menu-btn" onClick={handleCreateChat}>
+            Menu
           </button>
           <h1>RAG Assistant</h1>
         </header>
 
-        {!activeChat?.isIngested ? (
-        <section className="ingest-card">
-          <h2>Upload a PDF to Start</h2>
-          <p>Select one PDF file, ingest it, then begin chatting.</p>
-          <label className="chat-name-field">
-            <span>Chat name (required)</span>
-            <input
-              type="text"
-              className="chat-name-input"
-              value={activeChat?.title ?? ''}
-              onChange={(event) => handleTitleChange(activeChat?.id, event.target.value)}
-              placeholder="Describe this chat"
-              required
-            />
-          </label>
-          <label className="file-picker">
-            <input
-              type="file"
-              accept="application/pdf,.pdf"
-              onChange={(event) => handleFileSelect(event, activeChat?.id)}
-            />
-            <span>{activeChat?.file?.name ?? 'Choose PDF file'}</span>
-          </label>
-          <button
-            className="primary-btn"
-            disabled={
-              !activeChat?.file || activeChat?.ingesting || !activeChat?.title?.trim()
-            }
-            onClick={() => handleIngest(activeChat.id)}
-          >
-              {activeChat?.ingesting ? 'Ingesting...' : 'Ingest PDF'}
+        {!activeThread ? (
+          <section className="ingest-card">
+            <h2>Upload a PDF to Start</h2>
+            <p>Select one PDF file, ingest it, then begin chatting.</p>
+            <label className="chat-name-field">
+              <span>Chat name (required)</span>
+              <input
+                type="text"
+                className="chat-name-input"
+                value={pendingThread.title}
+                onChange={(event) => handleTitleChange(event.target.value)}
+                placeholder="Describe this chat"
+                required
+              />
+            </label>
+            <label className="file-picker">
+              <input type="file" accept="application/pdf,.pdf" onChange={handleFileSelect} />
+              <span>{pendingThread.file?.name ?? 'Choose PDF file'}</span>
+            </label>
+            <button
+              className="primary-btn"
+              disabled={
+                !pendingThread.file || pendingThread.ingesting || !pendingThread.title?.trim()
+              }
+              onClick={handleIngest}
+            >
+              {pendingThread.ingesting ? 'Ingesting...' : 'Ingest PDF'}
             </button>
-            {activeChat?.error ? <p className="error-text">{activeChat.error}</p> : null}
+            {pendingThread.error ? <p className="error-text">{pendingThread.error}</p> : null}
           </section>
         ) : (
           <section className="messages-area">
-            <div className="messages-list">
-              {activeChat.messages.length === 0 ? (
-                <div className="empty-state">
-                  <h2>{activeChat.title || 'New Chat'}</h2>
-                  <p>PDF indexed. Ask questions about your document.</p>
-                </div>
-              ) : (
-                activeChat.messages.map((msg) => (
-                  <article key={msg.id} className={`message-row ${msg.role}`}>
-                    <div className="bubble">{msg.text}</div>
-                  </article>
-                ))
-              )}
-            </div>
+            {messagesLoading ? (
+              <p className="status-text">Loading messages...</p>
+            ) : (
+              <div className="messages-list">
+                {messages.length === 0 ? (
+                  <div className="empty-state">
+                    <h2>{activeThread.threadName}</h2>
+                    <p>PDF indexed. Ask questions about your document.</p>
+                  </div>
+                ) : (
+                  messages.map((msg) => (
+                    <article key={msg.id} className={`message-row ${msg.role}`}>
+                      <div className="bubble">{msg.text}</div>
+                    </article>
+                  ))
+                )}
+              </div>
+            )}
 
             <div className="composer">
               <textarea
                 rows={1}
                 value={draft}
                 onChange={(event) => setDraft(event.target.value)}
-                placeholder="Ask something about the uploaded PDF..."
+                placeholder={`Ask something about ${activeThread.threadName}...`}
                 onKeyDown={(event) => {
                   if (event.key === 'Enter' && !event.shiftKey) {
                     event.preventDefault()
@@ -281,11 +332,15 @@ function App() {
                   }
                 }}
               />
-              <button className="primary-btn" onClick={handleSend} disabled={sending || !draft.trim()}>
+              <button
+                className="primary-btn"
+                onClick={handleSend}
+                disabled={sending || !draft.trim()}
+              >
                 {sending ? 'Sending...' : 'Send'}
               </button>
             </div>
-            {activeChat.error ? <p className="error-text chat-error">{activeChat.error}</p> : null}
+            {messagesError ? <p className="error-text chat-error">{messagesError}</p> : null}
           </section>
         )}
       </main>
