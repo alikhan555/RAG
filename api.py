@@ -18,6 +18,7 @@ rag_pipeline = RAGPipeline(
 class QueryRequest(BaseModel):
     threadId: str = Field(..., min_length=1)
     question: str = Field(..., min_length=1)
+    isStream: bool = Field(default=False)
 
 
 @app.post("/ingest")
@@ -36,10 +37,17 @@ async def ingest(
 
 @app.post("/query")
 async def query(request: QueryRequest):
-    return StreamingResponse(
-        rag_pipeline.query_stream(
+    if request.isStream:
+        return StreamingResponse(
+            rag_pipeline.query_stream(
+                request.question,
+                thread_id=request.threadId,
+            ),
+            media_type="text/plain",
+        )
+    else:
+        answer = rag_pipeline.query(
             request.question,
             thread_id=request.threadId,
-        ),
-        media_type="text/plain",
-    )
+        )
+        return {"answer": answer}

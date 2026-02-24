@@ -60,7 +60,7 @@ class RAGPipeline:
 
         print("Ingestion completed.")
 
-    def query_stream(self, question, thread_id, collection_name="RAG"):
+    def _get_chain(self, thread_id, collection_name="RAG"):
         vectorstore = QdrantVectorStore(
             client=QdrantClient(url=self.qdrant_url),
             collection_name=collection_name,
@@ -97,7 +97,14 @@ class RAGPipeline:
             | llm
             | StrOutputParser()
         )
+        return chain
 
+    def query_stream(self, question, thread_id, collection_name="RAG"):
+        chain = self._get_chain(thread_id, collection_name)
         for chunk in chain.stream(question):
             print(chunk, end="", flush=True)
             yield chunk
+
+    def query(self, question, thread_id, collection_name="RAG"):
+        chain = self._get_chain(thread_id, collection_name)
+        return chain.invoke(question)
