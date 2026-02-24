@@ -98,6 +98,7 @@
   display: flex;
   flex-direction: column;
   min-height: 100vh;
+  height: 100vh;
 }
 
 .chat-header {
@@ -186,19 +187,38 @@
 .messages-area {
   width: min(920px, calc(100% - 40px));
   margin: 0 auto;
-  display: grid;
-  grid-template-rows: 1fr auto auto;
+  display: flex;
+  flex-direction: column;
   gap: 10px;
   flex: 1;
+  min-height: 0;
   padding: 20px 0;
+  overflow: visible;
 }
 
 .messages-list {
+  flex: 1;
   overflow-y: auto;
   display: flex;
   flex-direction: column;
   gap: 14px;
   padding-right: 6px;
+}
+
+.messages-list::-webkit-scrollbar,
+.chat-list::-webkit-scrollbar {
+  width: 8px;
+}
+
+.messages-list::-webkit-scrollbar-track,
+.chat-list::-webkit-scrollbar-track {
+  background: rgba(255, 255, 255, 0.04);
+}
+
+.messages-list::-webkit-scrollbar-thumb,
+.chat-list::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.2);
+  border-radius: 10px;
 }
 
 .message-row {
@@ -250,6 +270,9 @@
   display: grid;
   grid-template-columns: 1fr auto;
   gap: 10px;
+  position: sticky;
+  bottom: 0;
+  z-index: 2;
 }
 
 .composer textarea {

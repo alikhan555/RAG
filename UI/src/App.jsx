@@ -337,7 +337,7 @@ function App() {
                 onClick={handleSend}
                 disabled={sending || !draft.trim()}
               >
-                {sending ? 'Sending...' : 'Send'}
+                {sending ? 'Thinking...' : 'Send'}
               </button>
             </div>
             {messagesError ? <p className="error-text chat-error">{messagesError}</p> : null}
