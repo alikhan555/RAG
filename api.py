@@ -24,7 +24,7 @@ app.add_middleware(
 rag_pipeline = RAGPipeline(
     qdrant_url="http://localhost:6333",
     llm_model_provider="openai",
-    llm_model_name="gpt-5-mini",
+    llm_model_name="gpt-5-nano",
     embed_model_provider="openai",
     embed_model_name="text-embedding-3-small",
 )
@@ -39,6 +39,7 @@ class QueryRequest(BaseModel):
 @app.post("/ingest")
 async def ingest(
     threadId: str = Form(...),
+    threadName: str = Form(...),
     file: UploadFile = File(...),
 ):
     # 1. Save file locally
@@ -47,10 +48,14 @@ async def ingest(
         shutil.copyfileobj(file.file, buffer)
 
     # 2. Ensure thread exists in database
-    ensure_thread(threadId)
+    ensure_thread(threadId, name=threadName)
 
     rag_pipeline.ingest(local_file_path, thread_id=threadId)
-    return {"message": "Ingestion completed", "threadId": threadId}
+    return {
+        "message": "Ingestion completed",
+        "threadId": threadId,
+        "threadName": threadName,
+    }
 
 
 @app.post("/query")

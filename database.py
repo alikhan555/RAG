@@ -29,6 +29,7 @@ Base = declarative_base()
 class Thread(Base):
     __tablename__ = "threads"
     id = Column(String, primary_key=True, index=True)
+    name = Column(String, nullable=True)
     created_at = Column(DateTime, default=datetime.utcnow)
 
 
@@ -46,13 +47,13 @@ def init_db():
     Base.metadata.create_all(bind=engine)
 
 
-def ensure_thread(thread_id: str):
+def ensure_thread(thread_id: str, name: str = None):
     """Creates a thread if it doesn't exist."""
     db = SessionLocal()
     try:
         db_thread = db.query(Thread).filter(Thread.id == thread_id).first()
         if not db_thread:
-            new_thread = Thread(id=thread_id)
+            new_thread = Thread(id=thread_id, name=name)
             db.add(new_thread)
             db.commit()
             db.refresh(new_thread)
