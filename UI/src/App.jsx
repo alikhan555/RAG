@@ -1,13 +1,15 @@
 import { useMemo, useState } from 'react'
 import './App.css'
 
-const INGEST_API_URL = import.meta.env.VITE_INGEST_API_URL ?? 'http://localhost:8000/ingest'
-const QUERY_API_URL = import.meta.env.VITE_QUERY_API_URL ?? 'http://localhost:8000/query'
+const INGEST_API_URL = import.meta.env.VITE_INGEST_API_URL ?? 'http://127.0.0.1:8000/ingest'
+const QUERY_API_URL = import.meta.env.VITE_QUERY_API_URL ?? 'http://127.0.0.1:8000/query'
+const DEFAULT_THREAD_ID = '101'
 
 const createChat = () => {
   const id = crypto.randomUUID()
   return {
     id,
+    threadId: DEFAULT_THREAD_ID,
     title: 'New Chat',
     createdAt: new Date().toISOString(),
     file: null,
@@ -86,7 +88,7 @@ function App() {
     try {
       const formData = new FormData()
       formData.append('file', chat.file)
-      formData.append('chat_id', chat.id)
+      formData.append('threadId', chat.threadId)
 
       const response = await fetch(INGEST_API_URL, {
         method: 'POST',
@@ -130,11 +132,8 @@ function App() {
 
     try {
       const body = {
+        threadId: activeChat.threadId,
         question: text,
-        query: text,
-        message: text,
-        chat_id: activeChat.id,
-        context: activeChat.ingestMeta,
       }
 
       const response = await fetch(QUERY_API_URL, {
@@ -159,9 +158,13 @@ function App() {
         messages: [...chat.messages, assistantMessage],
       }))
     } catch (error) {
+      const friendlyMessage =
+        error instanceof TypeError
+          ? 'Cannot reach query API. Check backend is running on http://127.0.0.1:8000 and CORS is enabled.'
+          : error.message || 'Unable to get response from API.'
       updateChat(activeChat.id, (chat) => ({
         ...chat,
-        error: error.message || 'Unable to get response from API.',
+        error: friendlyMessage,
       }))
     } finally {
       setSending(false)
