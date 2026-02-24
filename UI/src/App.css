@@ -141,6 +141,30 @@
   color: #9ab0c5;
 }
 
+.chat-name-field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  font-size: 14px;
+  color: #9ab0c5;
+}
+
+.chat-name-input {
+  border: 1px solid #3e4f63;
+  border-radius: 10px;
+  background: rgba(8, 10, 13, 0.85);
+  padding: 10px 12px;
+  color: #e6edf3;
+  font: inherit;
+  transition: border 0.2s ease, box-shadow 0.2s ease;
+}
+
+.chat-name-input:focus {
+  outline: none;
+  border-color: #5c7bd8;
+  box-shadow: 0 0 0 2px rgba(92, 123, 216, 0.35);
+}
+
 .file-picker {
   border: 1px dashed #3e4f63;
   border-radius: 12px;

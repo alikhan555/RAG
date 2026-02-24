@@ -3,14 +3,13 @@ import './App.css'
 
 const INGEST_API_URL = import.meta.env.VITE_INGEST_API_URL ?? 'http://127.0.0.1:8000/ingest'
 const QUERY_API_URL = import.meta.env.VITE_QUERY_API_URL ?? 'http://127.0.0.1:8000/query'
-const DEFAULT_THREAD_ID = '101'
 
 const createChat = () => {
   const id = crypto.randomUUID()
   return {
     id,
-    threadId: DEFAULT_THREAD_ID,
-    title: 'New Chat',
+    threadId: id,
+    title: '',
     createdAt: new Date().toISOString(),
     file: null,
     ingesting: false,
@@ -58,6 +57,15 @@ function App() {
     setDraft('')
   }
 
+  const handleTitleChange = (chatId, nextTitle) => {
+    if (!chatId) return
+    updateChat(chatId, (chat) => ({
+      ...chat,
+      title: nextTitle,
+      error: '',
+    }))
+  }
+
   const handleFileSelect = (event, chatId) => {
     const selected = event.target.files?.[0]
     if (!selected) return
@@ -72,7 +80,7 @@ function App() {
       ...chat,
       file: selected,
       error: '',
-      title: selected.name.replace(/\.pdf$/i, '') || 'PDF Chat',
+      title: chat.title?.trim() ? chat.title : selected.name.replace(/\.pdf$/i, '') || '',
     }))
   }
 
@@ -82,6 +90,13 @@ function App() {
       updateChat(chatId, (item) => ({ ...item, error: 'Please choose a PDF first.' }))
       return
     }
+    if (!chat.title?.trim()) {
+      updateChat(chatId, (item) => ({
+        ...item,
+        error: 'Chat name is required before ingesting.',
+      }))
+      return
+    }
 
     updateChat(chatId, (item) => ({ ...item, ingesting: true, error: '' }))
 
@@ -89,6 +104,7 @@ function App() {
       const formData = new FormData()
       formData.append('file', chat.file)
       formData.append('threadId', chat.threadId)
+      formData.append('threadName', chat.title.trim())
 
       const response = await fetch(INGEST_API_URL, {
         method: 'POST',
@@ -184,7 +200,7 @@ function App() {
               className={`chat-item ${chat.id === currentChatId ? 'active' : ''}`}
               onClick={() => setActiveChatId(chat.id)}
             >
-              <span className="chat-item-title">{chat.title}</span>
+              <span className="chat-item-title">{chat.title || 'New Chat'}</span>
               <span className="chat-item-status">
                 {chat.isIngested ? 'Ready' : chat.file ? 'Upload pending' : 'No PDF'}
               </span>
@@ -202,22 +218,35 @@ function App() {
         </header>
 
         {!activeChat?.isIngested ? (
-          <section className="ingest-card">
-            <h2>Upload a PDF to Start</h2>
-            <p>Select one PDF file, ingest it, then begin chatting.</p>
-            <label className="file-picker">
-              <input
-                type="file"
-                accept="application/pdf,.pdf"
-                onChange={(event) => handleFileSelect(event, activeChat?.id)}
-              />
-              <span>{activeChat?.file?.name ?? 'Choose PDF file'}</span>
-            </label>
-            <button
-              className="primary-btn"
-              disabled={!activeChat?.file || activeChat?.ingesting}
-              onClick={() => handleIngest(activeChat.id)}
-            >
+        <section className="ingest-card">
+          <h2>Upload a PDF to Start</h2>
+          <p>Select one PDF file, ingest it, then begin chatting.</p>
+          <label className="chat-name-field">
+            <span>Chat name (required)</span>
+            <input
+              type="text"
+              className="chat-name-input"
+              value={activeChat?.title ?? ''}
+              onChange={(event) => handleTitleChange(activeChat?.id, event.target.value)}
+              placeholder="Describe this chat"
+              required
+            />
+          </label>
+          <label className="file-picker">
+            <input
+              type="file"
+              accept="application/pdf,.pdf"
+              onChange={(event) => handleFileSelect(event, activeChat?.id)}
+            />
+            <span>{activeChat?.file?.name ?? 'Choose PDF file'}</span>
+          </label>
+          <button
+            className="primary-btn"
+            disabled={
+              !activeChat?.file || activeChat?.ingesting || !activeChat?.title?.trim()
+            }
+            onClick={() => handleIngest(activeChat.id)}
+          >
               {activeChat?.ingesting ? 'Ingesting...' : 'Ingest PDF'}
             </button>
             {activeChat?.error ? <p className="error-text">{activeChat.error}</p> : null}
@@ -227,7 +256,7 @@ function App() {
             <div className="messages-list">
               {activeChat.messages.length === 0 ? (
                 <div className="empty-state">
-                  <h2>{activeChat.title}</h2>
+                  <h2>{activeChat.title || 'New Chat'}</h2>
                   <p>PDF indexed. Ask questions about your document.</p>
                 </div>
               ) : (

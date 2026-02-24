@@ -47,6 +47,16 @@ def init_db():
     Base.metadata.create_all(bind=engine)
 
 
+def get_threads():
+    """Retrieves all threads ordered by creation date (newest first)."""
+    db = SessionLocal()
+    try:
+        threads = db.query(Thread).order_by(Thread.created_at.desc()).all()
+        return threads
+    finally:
+        db.close()
+
+
 def ensure_thread(thread_id: str, name: str = None):
     """Creates a thread if it doesn't exist."""
     db = SessionLocal()
