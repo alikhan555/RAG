@@ -24,7 +24,7 @@ app.add_middleware(
 rag_pipeline = RAGPipeline(
     qdrant_url="http://localhost:6333",
     llm_model_provider="openai",
-    llm_model_name="gpt-5-nano",
+    llm_model_name="gpt-5-mini",
     embed_model_provider="openai",
     embed_model_name="text-embedding-3-small",
 )

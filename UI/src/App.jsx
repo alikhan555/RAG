@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import './App.css'
 
 const INGEST_API_URL = import.meta.env.VITE_INGEST_API_URL ?? 'http://127.0.0.1:8000/ingest'
@@ -39,6 +39,17 @@ function App() {
   const [threadsError, setThreadsError] = useState('')
   const [draft, setDraft] = useState('')
   const [sending, setSending] = useState(false)
+  const messagesListRef = useRef(null)
+
+  const scrollToBottom = (smooth = true) => {
+    const list = messagesListRef.current
+    if (list) {
+      list.scrollTo({
+        top: list.scrollHeight,
+        behavior: smooth ? 'smooth' : 'auto',
+      })
+    }
+  }
 
   const activeThread = useMemo(
     () => threads.find((thread) => thread.threadId === activeThreadId) ?? null,
@@ -111,6 +122,10 @@ function App() {
     setMessagesError('')
     fetchMessages(activeThreadId)
   }, [activeThreadId, fetchMessages])
+
+  useLayoutEffect(() => {
+    scrollToBottom()
+  }, [messages])
 
   const handleCreateChat = () => {
     setActiveThreadId(null)
@@ -192,15 +207,18 @@ function App() {
 
     const text = draft.trim()
     const userMessage = { id: crypto.randomUUID(), role: 'user', text }
+    const assistantId = crypto.randomUUID()
+    const assistantMessage = { id: assistantId, role: 'assistant', text: '' }
     setDraft('')
     setSending(true)
 
-    setMessages((prev) => [...prev, userMessage])
+    setMessages((prev) => [...prev, userMessage, assistantMessage])
 
     try {
       const body = {
         threadId: activeThread.threadId,
         question: text,
+        isStream: true,
       }
 
       const response = await fetch(QUERY_API_URL, {
@@ -209,25 +227,49 @@ function App() {
         body: JSON.stringify(body),
       })
 
-      const payload = await response.json().catch(() => null)
       if (!response.ok) {
+        const payload = await response.json().catch(() => null)
         throw new Error(payload?.detail ?? payload?.message ?? 'Query API failed.')
       }
 
-      const assistantMessage = {
-        id: crypto.randomUUID(),
-        role: 'assistant',
-        text: getAnswerText(payload),
+      if (!response.body) {
+        const textPayload = await response.text().catch(() => '')
+        const finalText = textPayload || 'Response received, but no text was streamed.'
+        setMessages((prev) =>
+          prev.map((msg) => (msg.id === assistantId ? { ...msg, text: finalText } : msg)),
+        )
+      } else {
+        const reader = response.body.getReader()
+        const decoder = new TextDecoder()
+        let buffer = ''
+        let done = false
+        while (!done) {
+          const { value, done: chunkDone } = await reader.read()
+          done = chunkDone
+          if (value) {
+            buffer += decoder.decode(value, { stream: true })
+            setMessages((prev) =>
+              prev.map((msg) => (msg.id === assistantId ? { ...msg, text: buffer } : msg)),
+            )
+          }
+        }
+        const finalChunk = decoder.decode()
+        if (finalChunk) {
+          buffer += finalChunk
+          setMessages((prev) =>
+            prev.map((msg) => (msg.id === assistantId ? { ...msg, text: buffer } : msg)),
+          )
+        }
       }
-
-      setMessages((prev) => [...prev, assistantMessage])
     } catch (error) {
       const friendlyMessage =
         error instanceof TypeError
           ? 'Cannot reach query API. Check backend is running on http://127.0.0.1:8000 and CORS is enabled.'
           : error.message || 'Unable to get response from API.'
 
-      setMessages((prev) => [...prev, { id: crypto.randomUUID(), role: 'assistant', text: friendlyMessage }])
+      setMessages((prev) =>
+        prev.map((msg) => (msg.id === assistantId ? { ...msg, text: friendlyMessage } : msg)),
+      )
     } finally {
       setSending(false)
     }
@@ -300,10 +342,10 @@ function App() {
           </section>
         ) : (
           <section className="messages-area">
-            {messagesLoading ? (
-              <p className="status-text">Loading messages...</p>
-            ) : (
-              <div className="messages-list">
+        {messagesLoading ? (
+          <p className="status-text">Loading messages...</p>
+        ) : (
+          <div className="messages-list" ref={messagesListRef}>
                 {messages.length === 0 ? (
                   <div className="empty-state">
                     <h2>{activeThread.threadName}</h2>
