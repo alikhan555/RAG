@@ -239,6 +239,8 @@
   border-radius: 14px;
   line-height: 1.5;
   white-space: pre-wrap;
+  position: relative;
+  overflow: hidden;
 }
 
 .message-row.user .bubble {
@@ -249,6 +251,25 @@
 .message-row.assistant .bubble {
   background: #151d26;
   border: 1px solid #2a394b;
+}
+
+.bubble-text {
+  display: inline;
+  color: inherit;
+}
+
+.message-row.assistant.thinking .bubble-text {
+  background-image: linear-gradient(
+    90deg,
+    rgba(255, 255, 255, 0.1),
+    rgba(255, 255, 255, 0.8),
+    rgba(255, 255, 255, 0.1)
+  );
+  background-size: 400% 100%;
+  color: transparent;
+  -webkit-background-clip: text;
+  background-clip: text;
+  animation: shine 3.6s linear infinite;
 }
 
 .empty-state {
@@ -286,6 +307,45 @@
   min-height: 44px;
   max-height: 200px;
   padding: 9px 10px;
+}
+
+.button-loader {
+  width: 18px;
+  height: 18px;
+  border: 2px solid rgba(255, 255, 255, 0.35);
+  border-top-color: #ecf2f8;
+  border-radius: 50%;
+  animation: spin 0.9s linear infinite;
+  display: inline-block;
+}
+
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  border: 0;
+}
+
+@keyframes spin {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@keyframes shine {
+  0% {
+    background-position: 200% 0%;
+  }
+  100% {
+    background-position: -200% 0%;
+  }
 }
 
 .error-text {

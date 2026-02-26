@@ -99,6 +99,7 @@ function App() {
           id: crypto.randomUUID(),
           role: item.role,
           text: item.content,
+          isThinking: false,
         })),
       )
     } catch (error) {
@@ -208,11 +209,24 @@ function App() {
     const text = draft.trim()
     const userMessage = { id: crypto.randomUUID(), role: 'user', text }
     const assistantId = crypto.randomUUID()
-    const assistantMessage = { id: assistantId, role: 'assistant', text: '' }
+    const assistantMessage = {
+      id: assistantId,
+      role: 'assistant',
+      text: 'Thinking...',
+      isThinking: true,
+    }
     setDraft('')
     setSending(true)
 
     setMessages((prev) => [...prev, userMessage, assistantMessage])
+
+    const updateAssistant = (nextText, thinking = false) => {
+      setMessages((prev) =>
+        prev.map((msg) =>
+          msg.id === assistantId ? { ...msg, text: nextText, isThinking: thinking } : msg,
+        ),
+      )
+    }
 
     try {
       const body = {
@@ -235,9 +249,7 @@ function App() {
       if (!response.body) {
         const textPayload = await response.text().catch(() => '')
         const finalText = textPayload || 'Response received, but no text was streamed.'
-        setMessages((prev) =>
-          prev.map((msg) => (msg.id === assistantId ? { ...msg, text: finalText } : msg)),
-        )
+        updateAssistant(finalText, false)
       } else {
         const reader = response.body.getReader()
         const decoder = new TextDecoder()
@@ -248,17 +260,13 @@ function App() {
           done = chunkDone
           if (value) {
             buffer += decoder.decode(value, { stream: true })
-            setMessages((prev) =>
-              prev.map((msg) => (msg.id === assistantId ? { ...msg, text: buffer } : msg)),
-            )
+            updateAssistant(buffer, false)
           }
         }
         const finalChunk = decoder.decode()
         if (finalChunk) {
           buffer += finalChunk
-          setMessages((prev) =>
-            prev.map((msg) => (msg.id === assistantId ? { ...msg, text: buffer } : msg)),
-          )
+          updateAssistant(buffer, false)
         }
       }
     } catch (error) {
@@ -267,9 +275,7 @@ function App() {
           ? 'Cannot reach query API. Check backend is running on http://127.0.0.1:8000 and CORS is enabled.'
           : error.message || 'Unable to get response from API.'
 
-      setMessages((prev) =>
-        prev.map((msg) => (msg.id === assistantId ? { ...msg, text: friendlyMessage } : msg)),
-      )
+      updateAssistant(friendlyMessage, false)
     } finally {
       setSending(false)
     }
@@ -342,10 +348,10 @@ function App() {
           </section>
         ) : (
           <section className="messages-area">
-        {messagesLoading ? (
-          <p className="status-text">Loading messages...</p>
-        ) : (
-          <div className="messages-list" ref={messagesListRef}>
+            {messagesLoading ? (
+              <p className="status-text">Loading messages...</p>
+            ) : (
+              <div className="messages-list" ref={messagesListRef}>
                 {messages.length === 0 ? (
                   <div className="empty-state">
                     <h2>{activeThread.threadName}</h2>
@@ -353,8 +359,13 @@ function App() {
                   </div>
                 ) : (
                   messages.map((msg) => (
-                    <article key={msg.id} className={`message-row ${msg.role}`}>
-                      <div className="bubble">{msg.text}</div>
+                    <article
+                      key={msg.id}
+                      className={`message-row ${msg.role} ${msg.isThinking ? 'thinking' : ''}`}
+                    >
+                      <div className="bubble">
+                        <span className="bubble-text">{msg.text}</span>
+                      </div>
                     </article>
                   ))
                 )}
@@ -379,7 +390,14 @@ function App() {
                 onClick={handleSend}
                 disabled={sending || !draft.trim()}
               >
-                {sending ? 'Thinking...' : 'Send'}
+                {sending ? (
+                  <>
+                    <span className="button-loader" aria-hidden="true" />
+                    <span className="sr-only">Sending</span>
+                  </>
+                ) : (
+                  'Send'
+                )}
               </button>
             </div>
             {messagesError ? <p className="error-text chat-error">{messagesError}</p> : null}
