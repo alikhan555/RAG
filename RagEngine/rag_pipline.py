@@ -80,7 +80,9 @@ class RAGPipeline:
         )
 
         llm = init_chat_model(
-            self.llm_model_name, model_provider=self.llm_model_provider
+            self.llm_model_name,
+            model_provider=self.llm_model_provider,
+            service_tier="priority",
         )
 
         prompt = ChatPromptTemplate.from_template("""
